@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Langton's Ant · 朗顿蚂蚁</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --ant: #ff5d5d;
+    --cell-on: #e6edf3;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    height: 100vh;
+  }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    .panel { max-height: 45vh; overflow-y: auto; }
+  }
+  .canvas-wrap {
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .panel {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 20px;
+    overflow-y: auto;
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .subtitle { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .stat-value {
+    font-size: 16px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .phase {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+  .phase-name { color: var(--accent); font-weight: 600; }
+  .phase-desc { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .controls { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    color: #0d1117;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  button.primary:hover { opacity: 0.9; color: #0d1117; }
+  label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  .info {
+    margin-top: 20px;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+  .info code {
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+  }
+  .legend { display: flex; gap: 12px; margin-top: 8px; font-size: 11px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="canvas-wrap">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <aside class="panel">
+    <h1>Langton's Ant</h1>
+    <div class="subtitle">朗顿蚂蚁 · 一个简单规则的二维图灵机</div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">步数</div>
+        <div class="stat-value" id="stat-steps">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">黑格数</div>
+        <div class="stat-value" id="stat-black">0</div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-name" id="phase-name">混沌阶段</div>
+      <div class="phase-desc" id="phase-desc">前 ~100 步：对称、有规律</div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <button class="primary" id="btn-play">▶ 播放</button>
+        <button id="btn-step">单步</button>
+      </div>
+      <div class="row">
+        <button id="btn-reset">重置</button>
+        <button id="btn-fit">居中</button>
+      </div>
+
+      <div>
+        <label>每帧步数 <span id="speed-val">10</span></label>
+        <input type="range" id="speed" min="1" max="2000" value="10" />
+      </div>
+
+      <div>
+        <label>缩放 <span id="zoom-val">6</span> px/格</label>
+        <input type="range" id="zoom" min="1" max="20" value="6" />
+      </div>
+
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--cell-on)"></i>黑格</span>
+        <span><i class="swatch" style="background:var(--ant)"></i>蚂蚁</span>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>规则</strong><br/>
+      白格上：右转 90°，翻成黑，前进<br/>
+      黑格上：左转 90°，翻成白，前进
+      <br/><br/>
+      <strong>三个阶段</strong><br/>
+      <code>0–100</code> 对称的简单图案<br/>
+      <code>100–10000</code> 看似随机的混沌<br/>
+      <code>~10000+</code> 突现的"高速公路"周期 104 步
+      <br/><br/>
+      拖动可平移视图，滚轮缩放。
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Sparse grid using Map keyed by "x,y" — supports unbounded plane
+  let grid;
+  let antX, antY, antDir; // 0=N, 1=E, 2=S, 3=W
+  let steps;
+  let blackCount;
+  let viewX, viewY; // world coords at canvas center
+  let cellPx;       // pixels per cell
+  let running = false;
+  let stepsPerFrame = 10;
+
+  // Direction vectors: N, E, S, W
+  const DX = [0, 1, 0, -1];
+  const DY = [-1, 0, 1, 0];
+
+  function reset() {
+    grid = new Map();
+    antX = 0;
+    antY = 0;
+    antDir = 0; // facing North
+    steps = 0;
+    blackCount = 0;
+    viewX = 0;
+    viewY = 0;
+    updateStats();
+    draw();
+  }
+
+  function key(x, y) { return x + ',' + y; }
+
+  function step() {
+    const k = key(antX, antY);
+    const isBlack = grid.get(k) === 1;
+    if (isBlack) {
+      antDir = (antDir + 3) % 4; // left turn
+      grid.delete(k);
+      blackCount--;
+    } else {
+      antDir = (antDir + 1) % 4; // right turn
+      grid.set(k, 1);
+      blackCount++;
+    }
+    antX += DX[antDir];
+    antY += DY[antDir];
+    steps++;
+  }
+
+  function updateStats() {
+    document.getElementById('stat-steps').textContent = steps.toLocaleString();
+    document.getElementById('stat-black').textContent = blackCount.toLocaleString();
+    const pn = document.getElementById('phase-name');
+    const pd = document.getElementById('phase-desc');
+    if (steps < 100) {
+      pn.textContent = '混沌阶段 · 简单期';
+      pd.textContent = '前 ~100 步：对称、有规律';
+    } else if (steps < 10000) {
+      pn.textContent = '伪随机阶段';
+      pd.textContent = '看起来杂乱无章，没有可见模式';
+    } else {
+      pn.textContent = '高速公路阶段 🚗';
+      pd.textContent = '涌现：每 104 步重复，向左下无限延伸';
+    }
+  }
+
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function draw() {
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, w, h);
+
+    // World coords visible on screen
+    const halfW = w / 2 / cellPx;
+    const halfH = h / 2 / cellPx;
+    const xMin = Math.floor(viewX - halfW) - 1;
+    const xMax = Math.ceil(viewX + halfW) + 1;
+    const yMin = Math.floor(viewY - halfH) - 1;
+    const yMax = Math.ceil(viewY + halfH) + 1;
+
+    // Subtle grid lines for visibility when zoomed in
+    if (cellPx >= 6) {
+      ctx.strokeStyle = '#161b22';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = xMin; x <= xMax; x++) {
+        const sx = (x - viewX) * cellPx + w / 2;
+        ctx.moveTo(sx, 0); ctx.lineTo(sx, h);
+      }
+      for (let y = yMin; y <= yMax; y++) {
+        const sy = (y - viewY) * cellPx + h / 2;
+        ctx.moveTo(0, sy); ctx.lineTo(w, sy);
+      }
+      ctx.stroke();
+    }
+
+    // Black cells — iterate map, only those in viewport
+    ctx.fillStyle = '#e6edf3';
+    for (const k of grid.keys()) {
+      const [xs, ys] = k.split(',');
+      const x = +xs, y = +ys;
+      if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
+      const sx = (x - viewX) * cellPx + w / 2;
+      const sy = (y - viewY) * cellPx + h / 2;
+      ctx.fillRect(sx, sy, cellPx, cellPx);
+    }
+
+    // Ant
+    const ax = (antX - viewX) * cellPx + w / 2;
+    const ay = (antY - viewY) * cellPx + h / 2;
+    ctx.fillStyle = '#ff5d5d';
+    ctx.fillRect(ax, ay, cellPx, cellPx);
+
+    // Direction indicator triangle
+    if (cellPx >= 4) {
+      const cx = ax + cellPx / 2;
+      const cy = ay + cellPx / 2;
+      const r = cellPx * 0.35;
+      const angle = antDir * Math.PI / 2 - Math.PI / 2; // N points up
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+      ctx.lineTo(cx + Math.cos(angle + 2.4) * r * 0.6, cy + Math.sin(angle + 2.4) * r * 0.6);
+      ctx.lineTo(cx + Math.cos(angle - 2.4) * r * 0.6, cy + Math.sin(angle - 2.4) * r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function fitToAnt() {
+    viewX = antX + 0.5;
+    viewY = antY + 0.5;
+    draw();
+  }
+
+  function loop() {
+    if (running) {
+      for (let i = 0; i < stepsPerFrame; i++) step();
+      // Auto-follow when running fast enough that ant could leave the view
+      const rect = canvas.getBoundingClientRect();
+      const halfW = rect.width / 2 / cellPx;
+      const halfH = rect.height / 2 / cellPx;
+      if (Math.abs(antX - viewX) > halfW * 0.7 ||
+          Math.abs(antY - viewY) > halfH * 0.7) {
+        viewX = antX + 0.5;
+        viewY = antY + 0.5;
+      }
+      updateStats();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // Controls
+  const btnPlay = document.getElementById('btn-play');
+  btnPlay.addEventListener('click', () => {
+    running = !running;
+    btnPlay.textContent = running ? '⏸ 暂停' : '▶ 播放';
+  });
+  document.getElementById('btn-step').addEventListener('click', () => {
+    step();
+    updateStats();
+    draw();
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    running = false;
+    btnPlay.textContent = '▶ 播放';
+    reset();
+  });
+  document.getElementById('btn-fit').addEventListener('click', fitToAnt);
+
+  const speedInput = document.getElementById('speed');
+  const speedVal = document.getElementById('speed-val');
+  speedInput.addEventListener('input', () => {
+    stepsPerFrame = +speedInput.value;
+    speedVal.textContent = stepsPerFrame;
+  });
+
+  const zoomInput = document.getElementById('zoom');
+  const zoomVal = document.getElementById('zoom-val');
+  zoomInput.addEventListener('input', () => {
+    cellPx = +zoomInput.value;
+    zoomVal.textContent = cellPx;
+    draw();
+  });
+
+  // Pan with drag
+  let dragging = false;
+  let dragStart = null;
+  canvas.addEventListener('mousedown', (e) => {
+    dragging = true;
+    dragStart = { x: e.clientX, y: e.clientY, vx: viewX, vy: viewY };
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = (e.clientX - dragStart.x) / cellPx;
+    const dy = (e.clientY - dragStart.y) / cellPx;
+    viewX = dragStart.vx - dx;
+    viewY = dragStart.vy - dy;
+    draw();
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  // Zoom with wheel
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -1 : 1;
+    const next = Math.max(1, Math.min(20, cellPx + delta));
+    if (next !== cellPx) {
+      cellPx = next;
+      zoomInput.value = cellPx;
+      zoomVal.textContent = cellPx;
+      draw();
+    }
+  }, { passive: false });
+
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+    draw();
+  });
+
+  // Init
+  cellPx = +zoomInput.value;
+  resizeCanvas();
+  reset();
+  loop();
+})();
+</script>
+</body>
+</html>
