@@ -60,6 +60,7 @@
     gap: 8px;
     margin-bottom: 16px;
   }
+  .stats-3 { grid-template-columns: 1fr 1fr 1fr; }
   .stat {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -120,6 +121,20 @@
     width: 100%;
     accent-color: var(--accent);
   }
+  input[type="text"], select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  input[type="text"]:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
   .info {
     margin-top: 20px;
     font-size: 11px;
@@ -154,20 +169,24 @@
     <h1>Langton's Ant</h1>
     <div class="subtitle">朗顿蚂蚁 · 一个简单规则的二维图灵机</div>
 
-    <div class="stats">
+    <div class="stats stats-3">
       <div class="stat">
         <div class="stat-label">步数</div>
         <div class="stat-value" id="stat-steps">0</div>
       </div>
       <div class="stat">
-        <div class="stat-label">黑格数</div>
-        <div class="stat-value" id="stat-black">0</div>
+        <div class="stat-label">蚂蚁</div>
+        <div class="stat-value" id="stat-ants">1</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">上色格</div>
+        <div class="stat-value" id="stat-filled">0</div>
       </div>
     </div>
 
     <div class="phase">
-      <div class="phase-name" id="phase-name">混沌阶段</div>
-      <div class="phase-desc" id="phase-desc">前 ~100 步：对称、有规律</div>
+      <div class="phase-name">规则: <span id="rule-display">RL</span></div>
+      <div class="phase-desc" id="rule-desc">经典 Langton — 10000 步进入高速公路</div>
     </div>
 
     <div class="controls">
@@ -181,6 +200,25 @@
       </div>
 
       <div>
+        <label>规则字符串</label>
+        <select id="rule-preset">
+          <option value="">— 预设 —</option>
+        </select>
+        <div class="row" style="margin-top:6px">
+          <input type="text" id="rule-input" value="RL" spellcheck="false" />
+          <button id="btn-apply-rule">应用</button>
+        </div>
+      </div>
+
+      <div>
+        <label>蚂蚁</label>
+        <div class="row">
+          <button id="btn-add-ant">+ 随机添加</button>
+          <button id="btn-clear-ants">只留一只</button>
+        </div>
+      </div>
+
+      <div>
         <label>每帧步数 <span id="speed-val">10</span></label>
         <input type="range" id="speed" min="1" max="2000" value="10" />
       </div>
@@ -189,24 +227,20 @@
         <label>缩放 <span id="zoom-val">6</span> px/格</label>
         <input type="range" id="zoom" min="1" max="20" value="6" />
       </div>
-
-      <div class="legend">
-        <span><i class="swatch" style="background:var(--cell-on)"></i>黑格</span>
-        <span><i class="swatch" style="background:var(--ant)"></i>蚂蚁</span>
-      </div>
     </div>
 
     <div class="info">
-      <strong>规则</strong><br/>
-      白格上：右转 90°，翻成黑，前进<br/>
-      黑格上：左转 90°，翻成白，前进
+      <strong>规则字母</strong><br/>
+      <code>L</code> 左转 · <code>R</code> 右转 · <code>F</code> 直走 · <code>U</code> 调头
       <br/><br/>
-      <strong>三个阶段</strong><br/>
-      <code>0–100</code> 对称的简单图案<br/>
-      <code>100–10000</code> 看似随机的混沌<br/>
-      <code>~10000+</code> 突现的"高速公路"周期 104 步
+      <strong>怎么读</strong><br/>
+      <code>RL</code> = 颜色 0 时右转，颜色 1 时左转<br/>
+      <code>LLRR</code> = 4 种颜色对应 L/L/R/R
       <br/><br/>
-      拖动可平移视图，滚轮缩放。
+      每走过一格，颜色循环到下一种。<br/>
+      多只蚂蚁共享一张格子图（快照同步更新）。
+      <br/><br/>
+      拖动可平移，滚轮缩放。
     </div>
   </aside>
 </div>
