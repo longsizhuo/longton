@@ -135,6 +135,68 @@
     outline: none;
     border-color: var(--accent);
   }
+  .debug-panel {
+    margin-top: 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .debug-panel h3 {
+    margin: 14px 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .debug-panel h3:first-child { margin-top: 0; }
+  .debug-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    color: var(--muted);
+  }
+  .debug-row .v {
+    color: var(--text);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .debug-formula {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .debug-formula .var { color: var(--accent); }
+  .debug-formula .op { color: var(--muted); }
+  .debug-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+  #chunk-canvas {
+    width: 100%;
+    max-width: 256px;
+    aspect-ratio: 1 / 1;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .debug-hint {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 10px;
+  }
   .info {
     margin-top: 20px;
     font-size: 11px;
@@ -227,6 +289,47 @@
         <label>缩放 <span id="zoom-val">6</span> px/格</label>
         <input type="range" id="zoom" min="1" max="20" value="6" />
       </div>
+
+      <div class="row">
+        <button id="btn-debug">🔍 调试面板</button>
+      </div>
+    </div>
+
+    <div class="debug-panel" id="debug-panel" hidden>
+      <h3>蚂蚁 #1 当前状态</h3>
+      <div class="debug-row"><span>位置</span>
+        <span class="v">(<span id="dbg-x">0</span>, <span id="dbg-y">0</span>)</span></div>
+      <div class="debug-row"><span>朝向</span>
+        <span class="v" id="dbg-dir">↑ N</span></div>
+      <div class="debug-row"><span>脚下颜色</span>
+        <span class="v"><span id="dbg-color">0</span><i class="debug-swatch" id="dbg-swatch"></i></span></div>
+
+      <h3>下一步会发生什么</h3>
+      <div class="debug-formula">
+        <span class="op">// 读 rule[</span><span class="var" id="dbg-rule-idx">0</span><span class="op">]</span><br/>
+        <span class="op">rule = "</span><span class="var" id="dbg-rule">RL</span><span class="op">"</span><br/>
+        <span class="op">→ 动作:</span> <span class="var" id="dbg-action">右转</span><br/>
+        <span class="op">→ 新朝向:</span> <span class="var" id="dbg-next-dir">→ E</span><br/>
+        <span class="op">→ 新位置:</span> <span class="var" id="dbg-next-pos">(1, 0)</span><br/>
+        <span class="op">→ 该格颜色:</span> <span class="var" id="dbg-next-color">0 → 1</span>
+      </div>
+
+      <h3>坐标 → 1D 内存</h3>
+      <div class="debug-formula">
+        <span class="op">世界坐标</span> = (<span class="var" id="dbg-wx">0</span>, <span class="var" id="dbg-wy">0</span>)<br/>
+        <span class="op">瓷砖</span> = (x&gt;&gt;6, y&gt;&gt;6) = (<span class="var" id="dbg-cx">0</span>, <span class="var" id="dbg-cy">0</span>)<br/>
+        <span class="op">瓷砖内</span> = (x&amp;63, y&amp;63) = (<span class="var" id="dbg-lx">0</span>, <span class="var" id="dbg-ly">0</span>)<br/>
+        <span class="op">1D 索引</span> = ly*64 + lx = <span class="var" id="dbg-idx">0</span><br/>
+        chunk[<span class="var" id="dbg-idx2">0</span>] = <span class="var" id="dbg-byte">0</span>
+      </div>
+
+      <h3>内存状态</h3>
+      <div class="debug-row"><span>瓷砖数</span><span class="v" id="dbg-chunks">0</span></div>
+      <div class="debug-row"><span>占用字节</span><span class="v" id="dbg-bytes">0</span></div>
+
+      <h3>当前瓷砖 (64×64 字节)</h3>
+      <canvas id="chunk-canvas" width="256" height="256"></canvas>
+      <div class="debug-hint">每像素 = 1 字节。红框 = 蚂蚁所在。空白 = 颜色 0。</div>
     </div>
 
     <div class="info">

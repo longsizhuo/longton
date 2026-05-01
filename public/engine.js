@@ -15,6 +15,16 @@ export const ANT_COLORS = [
   '#d55dff', '#5dffe6', '#ffa05d', '#a0ff5d',
 ];
 
+export const CHUNK_INFO = {
+  size: CHUNK_SIZE,
+  shift: CHUNK_SHIFT,
+  mask: CHUNK_MASK,
+  area: CHUNK_SIZE * CHUNK_SIZE,
+};
+
+export const DIR_NAMES = ['N', 'E', 'S', 'W'];
+export const DIR_ARROWS = ['↑', '→', '↓', '←'];
+
 export function packKey(x, y) {
   return (x + ORIGIN) * 0x10000 + (y + ORIGIN);
 }
@@ -153,5 +163,43 @@ export class World {
         }
       }
     }
+  }
+
+  // Snapshot of one ant's state plus a preview of what its next step
+  // would do. Used by the teaching debug panel.
+  getDebugInfo(antIdx = 0) {
+    const ant = this.ants[antIdx];
+    if (!ant) return null;
+
+    const cx = ant.x >> CHUNK_SHIFT;
+    const cy = ant.y >> CHUNK_SHIFT;
+    const lx = ant.x & CHUNK_MASK;
+    const ly = ant.y & CHUNK_MASK;
+    const idx = ly * CHUNK_SIZE + lx;
+    const chunk = this.chunks.get(packKey(cx, cy)) || null;
+    const cellColor = chunk ? chunk[idx] : 0;
+    const ruleChar = this.rule[cellColor % this.numColors];
+    const turnAmount = TURN[ruleChar];
+    const nextDir = (ant.dir + turnAmount) % 4;
+    const nextColor = (cellColor + 1) % this.numColors;
+
+    return {
+      ant: { x: ant.x, y: ant.y, dir: ant.dir, color: ant.color },
+      cell: { color: cellColor, cx, cy, lx, ly, idx, chunk },
+      next: {
+        ruleChar,
+        dir: nextDir,
+        color: nextColor,
+        x: ant.x + DX[nextDir],
+        y: ant.y + DY[nextDir],
+      },
+    };
+  }
+
+  get memoryStats() {
+    return {
+      chunks: this.chunks.size,
+      bytes: this.chunks.size * CHUNK_SIZE * CHUNK_SIZE,
+    };
   }
 }
