@@ -148,14 +148,36 @@ function loop() {
 }
 
 let debugVisible = false;
-const debugPanel = document.getElementById('debug-panel');
+const debugHandle = document.getElementById('debug-handle');
+const bottomDebug = document.getElementById('bottom-debug');
 const chunkCanvas = document.getElementById('chunk-canvas');
 const chunkCtx = chunkCanvas.getContext('2d');
+const tapeCanvas = document.getElementById('tape-canvas');
+const tapeCtx = tapeCanvas.getContext('2d');
+const ruleVizEl = document.getElementById('rule-viz');
+let lastRuleRendered = '';
 
 function highlightSpan(id, text) {
   const el = document.getElementById(id);
   const s = String(text);
   if (el.textContent !== s) el.textContent = s;
+}
+
+function updateRuleViz(activeColor) {
+  if (lastRuleRendered !== world.rule) {
+    ruleVizEl.innerHTML = '';
+    for (let i = 0; i < world.rule.length; i++) {
+      const box = document.createElement('span');
+      box.className = 'rule-box';
+      box.textContent = `${i}:${world.rule[i]}`;
+      ruleVizEl.appendChild(box);
+    }
+    lastRuleRendered = world.rule;
+  }
+  const boxes = ruleVizEl.children;
+  for (let i = 0; i < boxes.length; i++) {
+    boxes[i].classList.toggle('active', i === activeColor);
+  }
 }
 
 function updateDebug() {
@@ -164,9 +186,13 @@ function updateDebug() {
 
   const { ant, cell, next } = info;
 
-  highlightSpan('dbg-x', ant.x);
-  highlightSpan('dbg-y', ant.y);
-  highlightSpan('dbg-dir', `${DIR_ARROWS[ant.dir]} ${DIR_NAMES[ant.dir]}`);
+  highlightSpan('tape-x', ant.x);
+  highlightSpan('tape-y', ant.y);
+  highlightSpan('tape-dir', `${DIR_ARROWS[ant.dir]} ${DIR_NAMES[ant.dir]}`);
+  highlightSpan('tape-cx', cell.cx);
+  highlightSpan('tape-cy', cell.cy);
+  highlightSpan('tape-idx', cell.idx);
+
   highlightSpan('dbg-color', cell.color);
   document.getElementById('dbg-swatch').style.background =
     cell.color === 0 ? 'transparent' : palette[cell.color] || '#444';
@@ -178,8 +204,6 @@ function updateDebug() {
   highlightSpan('dbg-next-pos', `(${next.x}, ${next.y})`);
   highlightSpan('dbg-next-color', `${cell.color} → ${next.color}`);
 
-  highlightSpan('dbg-wx', ant.x);
-  highlightSpan('dbg-wy', ant.y);
   highlightSpan('dbg-cx', cell.cx);
   highlightSpan('dbg-cy', cell.cy);
   highlightSpan('dbg-lx', cell.lx);
@@ -192,7 +216,81 @@ function updateDebug() {
   highlightSpan('dbg-chunks', mem.chunks);
   highlightSpan('dbg-bytes', mem.bytes.toLocaleString());
 
+  updateRuleViz(cell.color);
+  drawTape(cell.chunk, cell.idx);
   drawChunkCanvas(cell.chunk, cell.lx, cell.ly);
+}
+
+// 1D tape view of the chunk currently containing the lead ant.
+// Pointer is fixed at center; the strip of bytes scrolls underneath.
+// As the ant walks E/W in 2D the pointer slides smoothly; as it walks
+// N/S the strip jumps by 64 cells (one row in the tile).
+function drawTape(chunk, focusIdx) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = tapeCanvas.clientWidth;
+  const cssH = tapeCanvas.clientHeight;
+  if (tapeCanvas.width !== cssW * dpr || tapeCanvas.height !== cssH * dpr) {
+    tapeCanvas.width = cssW * dpr;
+    tapeCanvas.height = cssH * dpr;
+    tapeCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  tapeCtx.fillStyle = '#0d1117';
+  tapeCtx.fillRect(0, 0, cssW, cssH);
+
+  const boxW = 16;
+  const boxH = 36;
+  const boxY = 22;
+  const cellsVisible = Math.floor(cssW / boxW);
+  const halfVisible = Math.floor(cellsVisible / 2);
+  const startIdx = focusIdx - halfVisible;
+  const totalCells = CHUNK_INFO.area;
+
+  for (let i = 0; i < cellsVisible; i++) {
+    const idx = startIdx + i;
+    const x = i * boxW;
+    if (idx < 0 || idx >= totalCells) continue;
+
+    const c = chunk ? chunk[idx] : 0;
+    if (c === 0) {
+      tapeCtx.fillStyle = '#161b22';
+    } else {
+      tapeCtx.fillStyle = palette[c] || '#888';
+    }
+    tapeCtx.fillRect(x + 1, boxY + 1, boxW - 2, boxH - 2);
+    tapeCtx.strokeStyle = '#30363d';
+    tapeCtx.lineWidth = 1;
+    tapeCtx.strokeRect(x + 0.5, boxY + 0.5, boxW - 1, boxH - 1);
+  }
+
+  // Pointer (red triangle) above the focal cell at the center.
+  const pointerX = halfVisible * boxW + boxW / 2;
+  tapeCtx.fillStyle = '#ff5d5d';
+  tapeCtx.beginPath();
+  tapeCtx.moveTo(pointerX, boxY - 2);
+  tapeCtx.lineTo(pointerX - 6, boxY - 12);
+  tapeCtx.lineTo(pointerX + 6, boxY - 12);
+  tapeCtx.closePath();
+  tapeCtx.fill();
+  // Highlight the focal cell's box border in red.
+  tapeCtx.strokeStyle = '#ff5d5d';
+  tapeCtx.lineWidth = 2;
+  tapeCtx.strokeRect(halfVisible * boxW + 1, boxY + 1, boxW - 2, boxH - 2);
+
+  // Index labels under the strip.
+  tapeCtx.fillStyle = '#8b949e';
+  tapeCtx.font = '10px "SF Mono", Menlo, monospace';
+  tapeCtx.textAlign = 'center';
+  tapeCtx.fillText(String(focusIdx), pointerX, boxY + boxH + 14);
+  if (startIdx >= 0) {
+    tapeCtx.textAlign = 'left';
+    tapeCtx.fillText(String(startIdx), 2, boxY + boxH + 14);
+  }
+  const endIdx = startIdx + cellsVisible - 1;
+  if (endIdx < totalCells) {
+    tapeCtx.textAlign = 'right';
+    tapeCtx.fillText(String(endIdx), cssW - 2, boxY + boxH + 14);
+  }
 }
 
 // Draws the 64x64 chunk holding the lead ant. Cells are batched by color
@@ -260,9 +358,42 @@ document.getElementById('btn-fit').addEventListener('click', fitToAnt);
 const btnDebug = document.getElementById('btn-debug');
 btnDebug.addEventListener('click', () => {
   debugVisible = !debugVisible;
-  debugPanel.hidden = !debugVisible;
+  bottomDebug.hidden = !debugVisible;
+  debugHandle.hidden = !debugVisible;
   btnDebug.textContent = debugVisible ? '🔍 关闭调试' : '🔍 调试面板';
+  btnDebug.classList.toggle('active', debugVisible);
+  resizeCanvas();
+  draw();
   if (debugVisible) updateDebug();
+});
+
+// Vertical drag handle: resize the bottom debug panel.
+let resizing = false;
+let resizeStartY = 0;
+let resizeStartH = 0;
+const MIN_DEBUG_H = 140;
+debugHandle.addEventListener('mousedown', (e) => {
+  resizing = true;
+  resizeStartY = e.clientY;
+  resizeStartH = bottomDebug.getBoundingClientRect().height;
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!resizing) return;
+  const dy = resizeStartY - e.clientY;
+  const maxH = window.innerHeight - 160;
+  const newH = Math.max(MIN_DEBUG_H, Math.min(maxH, resizeStartH + dy));
+  document.documentElement.style.setProperty('--debug-h', newH + 'px');
+  resizeCanvas();
+  draw();
+  if (debugVisible) drawTape(world.getDebugInfo(0)?.cell.chunk, world.getDebugInfo(0)?.cell.idx);
+});
+window.addEventListener('mouseup', () => {
+  if (resizing) {
+    resizing = false;
+    document.body.style.userSelect = '';
+  }
 });
 
 const ruleInput = document.getElementById('rule-input');
@@ -343,6 +474,7 @@ canvas.addEventListener('wheel', (e) => {
 window.addEventListener('resize', () => {
   resizeCanvas();
   draw();
+  if (debugVisible) updateDebug();
 });
 
 cellPx = +zoomInput.value;
