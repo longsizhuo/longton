@@ -1,4 +1,4 @@
-import { LangtonsAnt } from './engine.js';
+import { LangtonsAnt, unpackKey } from './engine.js';
 
 const PHASE_LABELS = {
   simple: { name: '混沌阶段 · 简单期', desc: '前 ~100 步：对称、有规律' },
@@ -62,9 +62,8 @@ function draw() {
   }
 
   ctx.fillStyle = '#e6edf3';
-  for (const k of ant.cells.keys()) {
-    const [xs, ys] = k.split(',');
-    const x = +xs, y = +ys;
+  for (const k of ant.cells) {
+    const [x, y] = unpackKey(k);
     if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
     const sx = (x - viewX) * cellPx + w / 2;
     const sy = (y - viewY) * cellPx + h / 2;
