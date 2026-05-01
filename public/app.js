@@ -142,26 +142,23 @@ function loop() {
         viewY = lead.y + 0.5;
       }
     }
-    updateStats();
-    draw();
-    if (debugVisible) updateDebug();
+    refresh();
   }
   requestAnimationFrame(loop);
 }
 
 let debugVisible = false;
-let debugFrameCounter = 0;
 const debugPanel = document.getElementById('debug-panel');
 const chunkCanvas = document.getElementById('chunk-canvas');
 const chunkCtx = chunkCanvas.getContext('2d');
 
 function highlightSpan(id, text) {
   const el = document.getElementById(id);
-  if (el.textContent !== text) el.textContent = text;
+  const s = String(text);
+  if (el.textContent !== s) el.textContent = s;
 }
 
 function updateDebug() {
-  // Throttle expensive parts: text every frame is fine, chunk canvas every ~6 frames.
   const info = world.getDebugInfo(0);
   if (!info) return;
 
@@ -195,11 +192,11 @@ function updateDebug() {
   highlightSpan('dbg-chunks', mem.chunks);
   highlightSpan('dbg-bytes', mem.bytes.toLocaleString());
 
-  if ((debugFrameCounter++ & 7) === 0) {
-    drawChunkCanvas(cell.chunk, cell.lx, cell.ly);
-  }
+  drawChunkCanvas(cell.chunk, cell.lx, cell.ly);
 }
 
+// Draws the 64x64 chunk holding the lead ant. Cells are batched by color
+// so we change fillStyle at most (numColors - 1) times per frame.
 function drawChunkCanvas(chunk, antLx, antLy) {
   const size = CHUNK_INFO.size;
   const px = chunkCanvas.width / size;
@@ -207,13 +204,16 @@ function drawChunkCanvas(chunk, antLx, antLy) {
   chunkCtx.fillRect(0, 0, chunkCanvas.width, chunkCanvas.height);
 
   if (chunk) {
-    for (let i = 0; i < CHUNK_INFO.area; i++) {
-      const c = chunk[i];
-      if (c === 0) continue;
-      const lx = i & CHUNK_INFO.mask;
-      const ly = i >> CHUNK_INFO.shift;
-      chunkCtx.fillStyle = palette[c] || '#888';
-      chunkCtx.fillRect(lx * px, ly * px, px, px);
+    for (let c = 1; c < palette.length; c++) {
+      let styled = false;
+      for (let i = 0; i < CHUNK_INFO.area; i++) {
+        if (chunk[i] !== c) continue;
+        if (!styled) {
+          chunkCtx.fillStyle = palette[c] || '#888';
+          styled = true;
+        }
+        chunkCtx.fillRect((i & CHUNK_INFO.mask) * px, (i >> CHUNK_INFO.shift) * px, px, px);
+      }
     }
   }
 
